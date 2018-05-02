@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+    <title>南昌公车</title>
+    <link rel="stylesheet" href="http://cache.amap.com/lbs/static/main1119.css"/>
+    <script type="text/javascript" src="http://webapi.amap.com/maps?v=1.4.6&key=a9e86800806c576bc7f1e76ad7c4ceab"></script>
+    <script type="text/javascript" src="http://webapi.amap.com/maps?v=1.4.6&key=a9e86800806c576bc7f1e76ad7c4ceab&plugin=AMap.Driving"></script>
+    <script type="text/javascript" src="http://cache.amap.com/lbs/static/addToolbar.js"></script>
+    <script src="/javascripts/socket.io.js"></script>
+    <script src="/javascripts/jquery-3.3.1.min.js"></script>
+<body>
+<div id='container'></div>
+<div id="tip"></div>
+<script type="text/javascript">
+    /***************************************
+     由于Chrome、IOS10等已不再支持非安全域的浏览器定位请求，为保证定位成功率和精度，请尽快升级您的站点到HTTPS。
+     ***************************************/
+    var map, geolocation, currentPoint;
+    var citycode = 0;
+    //加载地图，调用浏览器定位服务
+    map = new AMap.Map('container', {
+        resizeEnable: true,
+        zoom:10
+    });
+
+    map.plugin('AMap.Geolocation', function() {
+        geolocation = new AMap.Geolocation({
+            enableHighAccuracy: true,//是否使用高精度定位，默认:true
+            timeout: 5000,          //超过10秒后停止定位，默认：无穷大
+            buttonOffset: new AMap.Pixel(10, 20),//定位按钮与设置的停靠位置的偏移量，默认：Pixel(10, 20)
+            zoomToAccuracy: false,      //定位成功后调整地图视野范围使定位位置及精度范围视野内可见，默认：false
+            buttonPosition:'LB'
+        });
+        map.addControl(geolocation);
+        geolocation.getCurrentPosition();
+        AMap.event.addListener(geolocation, 'complete', onComplete);//返回定位信息
+        AMap.event.addListener(geolocation, 'error', onError);      //返回定位出错信息
+    });
+    //解析定位结果
+    function onComplete(data) {
+        citycode = data.addressComponent.citycode;
+        var lng = data.position.getLng();
+        var lat = data.position.getLat();
+        currentPoint = new AMap.LngLat(lng, lat);
+//        var str=['定位成功'];
+//        str.push('经度：' + data.position.getLng());
+//        str.push('纬度：' + data.position.getLat());
+//        if(data.accuracy){
+//            str.push('精度：' + data.accuracy + ' 米');
+//        }//如为IP精确定位结果则没有精度信息
+//        str.push('是否经过偏移：' + (data.isConverted ? '是' : '否'));
+//        document.getElementById('tip').innerHTML = str.join('<br>');
+    }
+    //解析定位错误信息
+    function onError(data) {
+        //document.getElementById('tip').innerHTML = '定位失败';
+    }
+
+    //socket.io
+    var socket = io.connect('http://172.30.75.1:1306');
+    socket.on('sendCar', function(query){
+        //清空图层
+        map.clearMap();
+
+        var data = "起始时间："+query.startTime+"\n"+
+            "结束时间："+query.finishTime+"\n"+
+            "目的地："+query.destination+"\n"+
+            "事由："+query.cause;
+        alert(data);
+//        $('#tip').css("display","block");
+//        var str=[];
+//        str.push('起始时间：' + query.startTime);
+//        str.push('结束时间：' + query.finishTime);
+//        str.push('目的地：' + query.destination);
+//        str.push('事由：' + query.cause);
+//        str.push('<button id="receive" style="float:right;margin-bottom: 5px;" onclick="buttonClick()">收到</button>');
+//        document.getElementById('tip').innerHTML = str.join('<br>');
+
+        if(citycode == 0){
+            alert("未定位,无法规划路线")
+        }else {
+            geocoder(query.destination);
+        }
+    })
+
+    function geocoder(loc) {
+        var geocoder = new AMap.Geocoder({
+            city: citycode, //城市，默认：“全国”
+            radius: 1000 //范围，默认：500
+        });
+        //地理编码,返回地理编码结果
+        geocoder.getLocation(loc, function(status, result) {
+            if (status === 'complete' && result.info === 'OK') {
+                geocoder_CallBack(result);
+            }
+        });
+    }
+
+    //地理编码返回结果展示
+    function geocoder_CallBack(data) {
+        var resultStr = "";
+        //地理编码结果数组
+        var geocode = data.geocodes;
+        var lat = geocode[0].location.lat;
+        var lng = geocode[0].location.lng;
+
+        //构造路线导航类
+        var driving = new AMap.Driving({
+            map: map,
+            autoFitView: true,
+            showTraffic: true
+        });
+        driving.search(currentPoint, new AMap.LngLat(lng, lat));
+    }
+
+//    var buttonClick = function () {
+//        $('#tip').css("display","none");
+//    };
+</script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= title %></title>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <style type="text/css">
+      html{height:100%;width: 100%}
+    </style>
+    <link rel='stylesheet' href='/stylesheets/style.css' />
+  </head>
+  <script type="text/javascript" src="http://api.map.baidu.com/api?v=2.0&ak=73XS1o5mLXXkReZKccqXMSS5a1t0h3Qt"></script>
+  <script type="text/javascript" src="javascripts/plusGeolocation.js"></script>
+  <script src="/javascripts/socket.io.js"></script>
+  <body>
+    <div id="container"></div>
+    <script>
+        var currentPoint;
+        var currentCity;
+        var map = new BMap.Map("container");
+        var point = new BMap.Point(116.404, 39.915);
+        map.centerAndZoom(point, 15);
+
+        //百度地图定位
+        var geolocation = new BMap.Geolocation();
+        geolocation.getCurrentPosition(function(r){
+            if(this.getStatus() == BMAP_STATUS_SUCCESS){
+//                var mk = new BMap.Marker(r.point);
+//                map.addOverlay(mk);
+                map.panTo(r.point);
+                currentPoint = r.point;
+                currentCity = r.address.city
+                console.log(currentPoint)
+                //alert('您的位置：'+r.point.lng+','+r.point.lat);
+            }
+            else {
+                alert('failed'+this.getStatus());
+            }
+        },{enableHighAccuracy: true})
+
+        // 添加带有定位的导航控件
+        var navigationControl = new BMap.NavigationControl({
+            // 靠左上角位置
+            anchor: BMAP_ANCHOR_TOP_LEFT,
+            // LARGE类型
+            type: BMAP_NAVIGATION_CONTROL_LARGE,
+            // 启用显示定位
+            enableGeolocation: true
+        });
+        map.addControl(navigationControl);
+        // 添加定位控件
+        var geolocationControl = new BMap.GeolocationControl();
+        geolocationControl.addEventListener("locationSuccess", function(e){
+            // 定位成功事件
+            var address = '';
+            address += e.addressComponent.province;
+            address += e.addressComponent.city;
+            address += e.addressComponent.district;
+            address += e.addressComponent.street;
+            address += e.addressComponent.streetNumber;
+            //alert("当前定位地址为：" + address);
+            currentPoint = e.point;
+           currentCity = e.addressComponent.city;
+        });
+        geolocationControl.addEventListener("locationError",function(e){
+            // 定位失败事件
+            alert(e.message);
+        });
+
+        map.addControl(geolocationControl);
+
+        //清除覆盖物
+        function remove_overlay(){
+            map.clearOverlays();
+        }
+
+        //socket.io
+        var socket = io.connect('http://172.30.75.1:1306');
+        socket.on('sendCar', function(query){
+            console.log(query)
+            var data = "起始时间："+query.startTime+"\n"+
+                "结束时间："+query.finishTime+"\n"+
+                "目的地："+query.destination
+            "事由："+query.cause;
+            alert(data);
+
+            var myGeo = new BMap.Geocoder();
+            var loc = query.destination;
+            // 将地址解析结果显示在地图上,并调整地图视野
+            myGeo.getPoint(loc, function(point){
+                if (point) {
+                    remove_overlay();
+                    //收到消息后导航
+                    var driving = new BMap.DrivingRoute(map, {renderOptions:{map: map, autoViewport: true}});
+                    driving.search(currentPoint, point);
+                }
+            },currentCity);
+        })
+
+    </script>
+  </body>
+</html>
